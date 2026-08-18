@@ -1,1 +1,62 @@
+name: Split Cloudflare Official IPs
 
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Cloudflare official IPv4 ranges
+        run: curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
+
+      - name: Expand to /24 representatives
+        run: |
+          python3 << 'PYEOF'
+          import ipaddress
+
+          with open("ips-v4.txt") as f:
+              cidrs = [line.strip() for line in f if line.strip()]
+
+          seen_24 = set()
+          ips = []
+
+          for cidr in cidrs:
+              try:
+                  net = ipaddress.ip_network(cidr, strict=False)
+                  if net.prefixlen <= 24:
+                      for sub in net.subnets(new_prefix=24):
+                          key = str(sub.network_address)
+                          if key not in seen_24:
+                              seen_24.add(key)
+                              ips.append(str(sub.network_address))
+                  else:
+                      first = str(next(net.hosts()))
+                      key = ".".join(first.split(".")[:3]) + ".0"
+                      if key not in seen_24:
+                          seen_24.add(key)
+                          ips.append(first)
+              except Exception as e:
+                  print(f"Skip {cidr}: {e}")
+
+          with open("cf_official_ips.txt", "w") as f:
+              f.write("\n".join(ips) + "\n")
+
+          print(f"Total IPs: {len(ips)}")
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cf_official_ips.txt
+          git diff --cached --quiet || git commit -m "Update cf_official_ips.txt $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')"
+          git push
