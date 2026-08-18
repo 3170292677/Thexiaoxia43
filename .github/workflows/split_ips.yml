@@ -23,7 +23,7 @@ jobs:
           python3 << 'PYEOF'
           import ipaddress
 
-          LIMIT = 20000
+          LIMIT = 10000
           ips = []
           with open("ips-v4.txt") as f:
               for line in f:
