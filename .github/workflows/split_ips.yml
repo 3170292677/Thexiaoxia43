@@ -18,9 +18,9 @@ jobs:
       - name: Download Cloudflare official IPv4 ranges
         run: curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
 
-      - name: Expand to /24 representatives (~7000 IPs)
+      - name: Expand to /24 representatives
         run: |
-          python3 << 'EOF'
+          python3 << 'PYEOF'
           import ipaddress
 
           with open("ips-v4.txt") as f:
@@ -51,7 +51,7 @@ jobs:
               f.write("\n".join(ips) + "\n")
 
           print(f"Total IPs: {len(ips)}")
-          EOF
+          PYEOF
 
       - name: Commit and push
         run: |
