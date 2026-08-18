@@ -2,31 +2,33 @@ name: CF Official IP SpeedTest
 
 on:
   schedule:
-    - cron: '0 */6 * * *'          # 每6小时 UTC 跑一次
-  workflow_dispatch:              # 网页上可手动 Run workflow
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 permissions:
-  contents: write                 # GITHUB_TOKEN 推回当前仓库所需
+  contents: write
 
 jobs:
   cfst:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: 拉 Cloudflare 官方 IPv4 段（纯官方15段CIDR）
+      - name: 拉 Cloudflare 官方 IPv4 段
         run: |
           curl -sL https://www.cloudflare.com/ips-v4 -o ips.txt
           wc -l ips.txt
 
       - name: 下载 CloudflareST linux amd64
         run: |
-          VER=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -oP '"tag_name": "\K[^"]+')
-          curl -sL "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VER}/CloudflareST_linux_amd64.tar.gz" -o cfst.tar.gz
+          VER=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+          echo "最新版本: $VER"
+          curl -L --retry 3 --retry-delay 5 "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VER}/CloudflareST_linux_amd64.tar.gz" -o cfst.tar.gz
+          file cfst.tar.gz
           tar -xzf cfst.tar.gz
           chmod +x CloudflareST
+          ./CloudflareST -v
 
       - name: 测速（官方段抽样，只测延迟）
         run: |
@@ -36,7 +38,7 @@ jobs:
           echo "--- best_ips.txt ---"
           cat best_ips.txt
 
-      - name: 提交回仓库（用 GITHUB_TOKEN，不碰你的 PAT）
+      - name: 提交回仓库
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
