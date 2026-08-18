@@ -14,8 +14,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Download and expand all IPs
+      - name: Download and expand
         run: |
           curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
           python3 -c '
@@ -28,15 +30,9 @@ jobs:
                   net=ipaddress.ip_network(line,strict=False)
                   ips.extend([str(ip) for ip in net.hosts()])
           with open("cf_official_ips.txt","w") as f:
-              f.write("\n".join(ips))
-          print(len(ips))
+              f.write("\n".join(ips[:7000]))
+          print(len(ips[:7000]))
           '
-
-      - name: Limit to 7000 lines
-        run: |
-          head -7000 cf_official_ips.txt > cf_official_ips.txt.tmp
-          mv cf_official_ips.txt.tmp cf_official_ips.txt
-          wc -l cf_official_ips.txt
 
       - name: Commit and push
         run: |
@@ -44,4 +40,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cf_official_ips.txt
           git diff --cached --quiet || git commit -m "Update $(TZ=Asia/Shanghai date '+%Y-%m-%d')"
+          git pull --rebase origin main
           git push
+
