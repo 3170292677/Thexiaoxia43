@@ -1,8 +1,6 @@
 name: Split Cloudflare Official IPs
 
 on:
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -11,23 +9,55 @@ permissions:
 jobs:
   split:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download and expand (limit 7000)
+      - name: Generate IPs
         run: |
           curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
-          python3 -c 'import ipaddress; ips=[]; [ips.extend([str(ip) for ip in ipaddress.ip_network(l.strip(), strict=False).hosts()]) for l in open("ips-v4.txt") if l.strip()]; open("cf_official_ips.txt","w").write("\n".join(ips[:7000]))'
+          > cf_official_ips.txt
+          count=0
+          while IFS= read -r cidr; do
+            [ -z "$cidr" ] && continue
+            ip=$(echo "$cidr" | cut -d'/' -f1)
+            mask=$(echo "$cidr" | cut -d'/' -f2)
+            a=$(echo "$ip" | cut -d'.' -f1)
+            b=$(echo "$ip" | cut -d'.' -f2)
+            c=$(echo "$ip" | cut -d'.' -f3)
+            d=$(echo "$ip" | cut -d'.' -f4)
+            case "$mask" in
+              13) step=524288 ;;
+              14) step=262144 ;;
+              15) step=131072 ;;
+              16) step=65536 ;;
+              17) step=32768 ;;
+              18) step=16384 ;;
+              19) step=8192 ;;
+              20) step=4096 ;;
+              *) step=256 ;;
+            esac
+            i=0
+            while [ $i -lt $step ] && [ $count -lt 7000 ]; do
+              echo "$a.$b.$c.$d" >> cf_official_ips.txt
+              d=$((d + 1))
+              [ $d -gt 255 ] && d=0 && c=$((c + 1))
+              [ $c -gt 255 ] && c=0 && b=$((b + 1))
+              [ $b -gt 255 ] && b=0 && a=$((a + 1))
+              i=$((i + 1))
+              count=$((count + 1))
+            done
+          done < ips-v4.txt
+          echo "Total: $count lines"
           wc -l cf_official_ips.txt
 
-      - name: Commit and push
+      - name: Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cf_official_ips.txt
-          git diff --cached --quiet || git commit -m "Update $(TZ=Asia/Shanghai date '+%Y-%m-%d')"
+          git commit -m "Update $(date +%Y-%m-%d)" || echo "nothing"
           git pull --rebase origin main
           git push
