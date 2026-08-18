@@ -24,7 +24,7 @@ jobs:
           import ipaddress, itertools
           from collections import defaultdict
 
-          LIMIT = 20000
+          LIMIT = 150000
           REGION_MAP = {
               "173.245.48.0/20":  "US",
               "103.21.244.0/22":  "HK",
