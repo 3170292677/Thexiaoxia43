@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download and generate IPs (limit 20000)
+      - name: Download and generate IPs (limit 10000)
         run: |
           curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
           python3 << 'PYEOF'
