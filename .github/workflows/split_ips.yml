@@ -13,17 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Download Cloudflare official IPv4 ranges
-        run: |
-          curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
-          echo "Raw CIDR count:"
-          wc -l ips-v4.txt
+        run: curl -sL https://www.cloudflare.com/ips-v4 -o ips-v4.txt
 
       - name: Expand to /24 representatives (~7000 IPs)
         run: |
-          python3 -c '
+          python3 << 'EOF'
           import ipaddress
 
           with open("ips-v4.txt") as f:
@@ -34,19 +31,15 @@ jobs:
 
           for cidr in cidrs:
               try:
-                  network = ipaddress.ip_network(cidr, strict=False)
-                  # 如果段 >= /24，取该段第一个 IP 作为 /24 代表
-                  # 如果段 < /24（如 /20），拆成多个 /24 各取第一个
-                  if network.prefixlen <= 24:
-                      # 大段拆成 /24
-                      for subnet in network.subnets(new_prefix=24):
-                          key = str(subnet.network_address)
+                  net = ipaddress.ip_network(cidr, strict=False)
+                  if net.prefixlen <= 24:
+                      for sub in net.subnets(new_prefix=24):
+                          key = str(sub.network_address)
                           if key not in seen_24:
                               seen_24.add(key)
-                              ips.append(str(subnet.network_address))
+                              ips.append(str(sub.network_address))
                   else:
-                      # 小段（如 /28）直接取第一个
-                      first = str(next(network.hosts()))
+                      first = str(next(net.hosts()))
                       key = ".".join(first.split(".")[:3]) + ".0"
                       if key not in seen_24:
                           seen_24.add(key)
@@ -55,23 +48,15 @@ jobs:
                   print(f"Skip {cidr}: {e}")
 
           with open("cf_official_ips.txt", "w") as f:
-              f.write("\n".join(ips))
+              f.write("\n".join(ips) + "\n")
 
-          print(f"Total /24 representative IPs: {len(ips)}")
-          '
-
-      - name: Show sample
-        run: |
-          echo "First 10 lines:"
-          head -10 cf_official_ips.txt
-          echo "..."
-          echo "Total lines:"
-          wc -l cf_official_ips.txt
+          print(f"Total IPs: {len(ips)}")
+          EOF
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cf_official_ips.txt
-          git diff --cached --quiet || git commit -m "Update cf_official_ips.txt $(TZ=Asia/Shanghai date '+%Y-%m-%d')"
+          git diff --cached --quiet || git commit -m "Update cf_official_ips.txt $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')"
           git push
